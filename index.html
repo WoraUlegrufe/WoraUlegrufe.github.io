@@ -2,266 +2,237 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <title>QR Scanner</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-
-  <!-- Библиотека html5-qrcode (через CDN) -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/minified/html5-qrcode.min.js"></script>
-
-  <!-- Telegram Web App SDK (работает только внутри Telegram) -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
+  <title>QR Начисление</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#000; font-family:sans-serif; overflow:hidden; }
 
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #000;
-      color: #fff;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      overflow: hidden;
+    /* Экран камеры */
+    #camera-screen {
+      width:100vw; height:100vh;
+      display:flex; justify-content:center; align-items:center;
+      position:relative;
     }
+    #video { width:100%; height:100%; object-fit:cover; }
 
-    .container {
-      width: 100%;
-      max-width: 420px;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 16px;
-    }
-
-    h1 {
-      font-size: 20px;
-      text-align: center;
-      margin-bottom: 4px;
-    }
-
-    .subtitle {
-      font-size: 13px;
-      text-align: center;
-      color: #ccc;
-    }
-
-    /* Область сканера */
-    #qr-reader {
-      width: 100%;
-      max-width: 360px;
-      aspect-ratio: 1 / 1;
-      position: relative;
-      border-radius: 16px;
-      overflow: hidden;
-      background: #111;
-    }
-
-    /* Рамка поверх видео */
+    /* Прозрачная рамка сканирования */
     .scan-frame {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 70%;
-      height: 70%;
-      transform: translate(-50%, -50%);
-      border: 3px solid rgba(0, 255, 128, 0.9);
-      border-radius: 18px;
-      box-shadow: 0 0 15px rgba(0, 255, 128, 0.9);
-      pointer-events: none;
-      z-index: 10;
-      animation: glow 2s infinite;
+      position:absolute;
+      width:360px; height:360px;
+      border:4px solid rgba(0,255,128,0.8);
+      border-radius:12px;
+      animation: pulse 2s infinite;
     }
 
-    @keyframes glow {
-      0% { box-shadow: 0 0 10px rgba(0,255,128,0.6); }
-      50% { box-shadow: 0 0 20px rgba(0,255,128,1); }
-      100% { box-shadow: 0 0 10px rgba(0,255,128,0.6); }
+    @keyframes pulse {
+      0% { box-shadow:0 0 10px rgba(0,255,128,0.7); }
+      50% { box-shadow:0 0 20px rgba(0,255,128,1); }
+      100% { box-shadow:0 0 10px rgba(0,255,128,0.7); }
     }
 
-    /* Блок результата */
-    .result-box {
-      width: 100%;
-      max-width: 420px;
-      background: #111;
-      border-radius: 16px;
-      padding: 12px 14px;
-      font-size: 14px;
-      line-height: 1.4;
-      word-break: break-all;
-      border: 1px solid #222;
+    /* Форма начисления */
+    #form-screen {
+      display:none; width:100vw; height:100vh;
+      background:#1a1a1a; color:#fff;
+      padding:30px; text-align:center;
+      justify-content:center; align-items:center;
+      flex-direction:column;
+    }
+    #form-screen.show { display:flex; }
+
+    .card {
+      background:#fff; color:#000; width:90%; max-width:420px;
+      border-radius:20px; padding:30px;
+      box-shadow:0 12px 30px rgba(0,0,0,0.4);
+      animation: fadeIn 0.3s ease;
     }
 
-    .result-label {
-      color: #aaa;
-      font-size: 12px;
-      margin-bottom: 4px;
+    @keyframes fadeIn { from{opacity:0; transform:translateY(15px);} to{opacity:1; transform:translateY(0);} }
+
+    h2 { margin-bottom:20px; color:#00c853; }
+    .qr-value {
+      background:#f0f0f0; padding:14px; border-radius:12px;
+      margin:16px 0; font-family:monospace;
+      font-size:16px; word-break:break-all;
     }
 
-    .result-value {
-      color: #0f0;
+    input {
+      width:100%; padding:14px; font-size:18px;
+      margin:16px 0; border:2px solid #ddd;
+      border-radius:12px; text-align:center;
     }
 
-    .error {
+    .btn {
+      background:#00c853; color:white;
+      padding:14px 28px; border:none;
+      border-radius:12px; font-size:18px;
+      cursor:pointer; margin:8px; transition:0.2s;
+    }
+    .btn:active { transform:scale(0.95); }
+    .btn-secondary { background:#666; }
+    .btn:disabled { background:#aaa; cursor:not-allowed; }
+
+    .warning {
       color: #ff5555;
-      font-size: 13px;
-      margin-top: 4px;
-    }
-
-    .buttons {
-      display: flex;
-      gap: 10px;
-      margin-top: 8px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-
-    button {
-      border: none;
-      border-radius: 999px;
-      padding: 10px 18px;
+      margin: 8px 0 0;
       font-size: 14px;
-      cursor: pointer;
-      font-weight: 500;
-    }
-
-    .btn-main {
-      background: #00c853;
-      color: #000;
-    }
-
-    .btn-secondary {
-      background: #333;
-      color: #fff;
-    }
-
-    .small-hint {
-      font-size: 11px;
-      color: #777;
-      text-align: center;
-      margin-top: 4px;
-      max-width: 360px;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Сканер QR-кодов</h1>
-    <div class="subtitle">Наведите камеру на QR-код, чтобы считать данные</div>
 
-    <div id="qr-reader"></div>
+  <!-- ЭКРАН КАМЕРЫ -->
+  <div id="camera-screen">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas" style="display:none;"></canvas>
     <div class="scan-frame"></div>
+  </div>
 
-    <div class="result-box">
-      <div class="result-label">Результат сканирования:</div>
-      <div id="result" class="result-value">Ожидание сканирования...</div>
-      <div id="error" class="error"></div>
+  <!-- ОКНО НАЧИСЛЕНИЯ -->
+  <div id="form-screen">
+    <div class="card">
+      <h2 id="formTitle">Результат сканирования</h2>
 
-      <div class="buttons">
-        <button class="btn-main" id="btn-restart">Сканировать снова</button>
+      <div class="qr-value" id="qrValue"></div>
+      <p class="warning" id="warningText"></p>
+
+      <div id="amountBlock" style="display:none;">
+        <input type="number" id="amount" placeholder="Сумма" min="1" />
+        <button class="btn" id="accrueBtn" onclick="accrue()">Начислить</button>
       </div>
-      <div class="small-hint">
-        Камера работает только по HTTPS. В Telegram Desktop или на старых устройствах камера может быть недоступна.
-      </div>
+
+      <button class="btn btn-secondary" onclick="restart()">Сканировать снова</button>
     </div>
   </div>
 
   <script>
-    let html5QrCode = null;
-    let isScanning = false;
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const cameraScreen = document.getElementById('camera-screen');
+    const formScreen = document.getElementById('form-screen');
+    const qrValue = document.getElementById('qrValue');
+    const warningText = document.getElementById('warningText');
+    const amountBlock = document.getElementById('amountBlock');
+    const amountInput = document.getElementById('amount');
+    const accrueBtn = document.getElementById('accrueBtn');
+    let stream = null;
+    let lastQr = '';
 
-    const resultEl = document.getElementById('result');
-    const errorEl = document.getElementById('error');
-    const restartBtn = document.getElementById('btn-restart');
-
-    function logError(msg) {
-      console.error(msg);
-      errorEl.textContent = msg;
+    // === ЗАПУСК КАМЕРЫ ===
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+        });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          video.play();
+          requestAnimationFrame(scan);
+        };
+      } catch (e) {
+        alert('Ошибка камеры: ' + e.message);
+      }
     }
 
-    async function startScanner() {
-      if (isScanning) return;
-      isScanning = true;
-      errorEl.textContent = "";
-
-      const qrRegionId = "qr-reader";
-
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        logError("Камера не поддерживается этим устройством или браузером.");
-        resultEl.textContent = "Камера недоступна.";
-        isScanning = false;
+    // === СКАНИРОВАНИЕ ===
+    function scan() {
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+        requestAnimationFrame(scan);
         return;
       }
 
-      if (!html5QrCode) {
-        html5QrCode = new Html5Qrcode(qrRegionId);
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+      if (code && code.data !== lastQr) {
+        lastQr = code.data.trim();
+        stopCameraAndShowForm(lastQr);
       } else {
-        // очистка предыдущего состояния, если нужно
-        try { await html5QrCode.stop(); } catch (e) {}
-        try { await html5QrCode.clear(); } catch (e) {}
-      }
-
-      const config = {
-        fps: 15,
-        qrbox: { width: 250, height: 250 }
-      };
-
-      const onScanSuccess = decodedText => {
-        // Показать результат
-        resultEl.textContent = decodedText || "(пусто)";
-        // Остановить сканирование после первого успешного чтения
-        html5QrCode.stop().catch(e => console.warn("Ошибка остановки:", e));
-        isScanning = false;
-
-        // Если запущено внутри Telegram WebApp — отправим данные боту
-        try {
-          if (window.Telegram && Telegram.WebApp) {
-            Telegram.WebApp.sendData(decodedText);
-            // Можно автоматом закрыть мини-апп:
-            // Telegram.WebApp.close();
-          }
-        } catch (e) {
-          console.warn("Ошибка отправки данных в Telegram WebApp:", e);
-        }
-      };
-
-      const onScanFailure = error => {
-        // сюда приходят частые "мягкие" ошибки, логировать не обязательно
-        // console.debug(error);
-      };
-
-      // Попробуем сперва заднюю камеру, затем fallback на фронтальную
-      try {
-        await html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure);
-      } catch (e1) {
-        console.warn("Не удалось запустить заднюю камеру, пробуем фронтальную:", e1);
-        try {
-          await html5QrCode.start({ facingMode: "user" }, config, onScanSuccess, onScanFailure);
-        } catch (e2) {
-          logError("Не удалось получить доступ к камере: " + e2);
-          resultEl.textContent = "Камера недоступна.";
-          isScanning = false;
-        }
+        requestAnimationFrame(scan);
       }
     }
 
-    restartBtn.addEventListener('click', () => {
-      resultEl.textContent = "Ожидание сканирования...";
-      startScanner();
+    // === ВАЛИДАЦИЯ QR ===
+    function isTelegramId(data) {
+      // Проверяем, что это только цифры и длина похожа на Telegram ID (5–12 символов)
+      return /^[0-9]{5,12}$/.test(data);
+    }
+
+    // === ОСТАНОВКА КАМЕРЫ + ОТОБРАЖЕНИЕ ===
+    function stopCameraAndShowForm(qrText) {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+      }
+
+      qrValue.textContent = qrText;
+      cameraScreen.style.display = 'none';
+      formScreen.classList.add('show');
+
+      if (isTelegramId(qrText)) {
+        warningText.textContent = '';
+        amountBlock.style.display = 'block';
+        amountInput.focus();
+      } else {
+        warningText.textContent = '⚠️ Это не Telegram ID. Начисление недоступно.';
+        amountBlock.style.display = 'none';
+      }
+    }
+
+    // === НАЧИСЛЕНИЕ ===
+    function accrue() {
+      const amount = parseFloat(amountInput.value);
+      if (isNaN(amount) || amount <= 0) {
+        alert('Введите корректную сумму!');
+        return;
+      }
+
+      accrueBtn.disabled = true;
+      accrueBtn.textContent = 'Начисляем...';
+
+      fetch('/accrue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qr: lastQr, amount: amount })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.message) {
+          alert(data.message);
+          restart();
+        } else {
+          alert(data.error || 'Ошибка');
+        }
+      })
+      .catch(() => alert('Нет связи с сервером'))
+      .finally(() => {
+        accrueBtn.disabled = false;
+        accrueBtn.textContent = 'Начислить';
+      });
+    }
+
+    // === ПОВТОРНОЕ СКАНИРОВАНИЕ ===
+    function restart() {
+      formScreen.classList.remove('show');
+      cameraScreen.style.display = 'flex';
+      lastQr = '';
+      startCamera();
+    }
+
+    // === ENTER = НАЧИСЛИТЬ ===
+    amountInput.addEventListener('keypress', e => {
+      if (e.key === 'Enter') accrue();
     });
 
-    // Автостарт при загрузке страницы
-    window.addEventListener('load', () => {
-      // Если внутри Telegram WebApp — чуть расширим окно
-      try {
-        if (window.Telegram && Telegram.WebApp) {
-          Telegram.WebApp.expand();
-        }
-      } catch (e) {}
-      startScanner();
-    });
+    // === СТАРТ ===
+    startCamera();
   </script>
 </body>
 </html>
